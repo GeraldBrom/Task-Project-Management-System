@@ -1,10 +1,61 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import axios from 'axios'
 import { useRouter } from 'vue-router'
 
 const router = useRouter()
 
+const tasks = ref([])
+const newTask = ref({
+  title: '',
+  description: ''
+})
+
+// Получение всех задач
+const fetchTasks = async () => {
+  try {
+    const response = await axios.get('/api/tasks')
+    tasks.value = response.data
+  } catch (error) {
+    console.error('Failed to fetch tasks:', error)
+  }
+}
+
+// Создание задачи
+const createTask = async () => {
+  try {
+    const response = await axios.post('/api/tasks', newTask.value)
+    tasks.value.unshift(response.data)
+    newTask.value = { title: '', description: '' }
+  } catch (error) {
+    console.error('Failed to create task:', error)
+  }
+}
+
+// Обновление задачи
+const updateTask = async (task) => {
+  try {
+    const response = await axios.put(`/api/tasks/${task.id}`, {
+      title: task.title,
+      description: task.description
+    })
+    Object.assign(task, response.data)
+  } catch (error) {
+    console.error('Failed to update task:', error)
+  }
+}
+
+// Удаление задачи
+const deleteTask = async (taskId) => {
+  try {
+    await axios.delete(`/api/tasks/${taskId}`)
+    tasks.value = tasks.value.filter(t => t.id !== taskId)
+  } catch (error) {
+    console.error('Failed to delete task:', error)
+  }
+}
+
+// Выход
 const handleLogout = async () => {
   try {
     await axios.post('/api/logout')
@@ -14,6 +65,10 @@ const handleLogout = async () => {
     router.push('/login')
   }
 }
+
+onMounted(() => {
+  fetchTasks()
+})
 </script>
 
 <template>
@@ -34,13 +89,15 @@ const handleLogout = async () => {
       <section class="task-form-card">
         <h2>Новая задача</h2>
 
-        <form class="task-form" @submit.prevent>
+        <form class="task-form" @submit.prevent="createTask">
           <div class="task-form__field">
             <label for="new-task-title">Название</label>
             <input
                 id="new-task-title"
+                v-model="newTask.title"
                 type="text"
                 placeholder="Например, подготовить отчёт"
+                required
             />
           </div>
 
@@ -48,6 +105,7 @@ const handleLogout = async () => {
             <label for="new-task-description">Описание <span>необязательно</span></label>
             <textarea
                 id="new-task-description"
+                v-model="newTask.description"
                 rows="3"
                 placeholder="Добавьте детали задачи"
             ></textarea>
@@ -63,36 +121,47 @@ const handleLogout = async () => {
       <section class="tasks-list-section">
         <div class="tasks-list-section__header">
           <h2>Активные задачи</h2>
-          <span class="tasks-count">0 задач</span>
+          <span class="tasks-count">{{ tasks.length }} задач</span>
         </div>
 
-        <div class="empty-state">
+        <div v-if="tasks.length === 0" class="empty-state">
           <div class="empty-state__icon">✓</div>
           <h3>Список задач пока пуст</h3>
           <p>Добавьте первую задачу через форму выше.</p>
         </div>
 
-        <!--
-        Шаблон карточки задачи. Позже заменишь на v-for="task in tasks".
-        <article class="task-card">
-            <div class="task-card__content">
-                <button class="task-card__status task-card__status--pending" type="button">
-                    Активна
-                </button>
+        <article v-for="task in tasks" :key="task.id" class="task-card">
+          <div class="task-card__content">
+            <button class="task-card__status task-card__status--pending" type="button">
+              Активна
+            </button>
 
-                <div class="task-card__details">
-                    <button class="task-card__title" type="button">Подготовить отчёт</button>
-                    <p class="task-card__description">Описание задачи до 50 символов...</p>
-                    <p class="task-card__reminder">Напомнить: 18 сентября, 10:00</p>
-                </div>
+            <div class="task-card__details">
+              <input
+                  v-model="task.title"
+                  class="task-card__title"
+                  type="text"
+                  @blur="updateTask(task)"
+              />
+              <textarea
+                  v-model="task.description"
+                  class="task-card__description"
+                  rows="2"
+                  @blur="updateTask(task)"
+                  placeholder="Описание задачи..."
+              ></textarea>
             </div>
+          </div>
 
-            <div class="task-card__actions">
-                <button class="text-button" type="button">Напомнить</button>
-                <button class="delete-button" type="button">Удалить</button>
-            </div>
+          <div class="task-card__actions">
+            <button class="text-button" type="button" @click="updateTask(task)">
+              Сохранить
+            </button>
+            <button class="delete-button" type="button" @click="deleteTask(task.id)">
+              Удалить
+            </button>
+          </div>
         </article>
-        -->
       </section>
     </div>
   </main>
