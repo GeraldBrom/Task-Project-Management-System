@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router';
+import axios from 'axios';
 
 const routes = [
     {
@@ -15,6 +16,7 @@ const routes = [
         path: '/tasks',
         name: 'tasks',
         component: () => import('../pages/Tasks.vue'),
+        meta: { requiresAuth: true },
     },
     {
         path: '/',
@@ -25,6 +27,20 @@ const routes = [
 const router = createRouter({
     history: createWebHistory(),
     routes,
+});
+
+router.beforeEach(async (to, from, next) => {
+    // Если маршрут требует авторизации
+    if (to.meta.requiresAuth) {
+        try {
+            await axios.get('/api/user');
+            next();
+        } catch (error) {
+            next({ name: 'login' });
+        }
+    } else {
+        next();
+    }
 });
 
 export default router;
