@@ -52,4 +52,3 @@ docker-compose exec app php artisan migrate
 - CRUD задач (pending/completed)
 - Напоминания (одно на задачу, макс. 3 активных)
 - Валидация на бэкенде
-- Адаптивный интерфейс
