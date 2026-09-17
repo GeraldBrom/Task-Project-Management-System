@@ -2,16 +2,22 @@
 import { ref, onMounted } from 'vue'
 import axios from 'axios'
 import { useRouter } from 'vue-router'
+import TaskCard from "@/component/TaskCard.vue";
+import ReminderModal from "@/component/modal/ReminderModal.vue";
+import TaskEditModal from "@/component/modal/TaskEditModal.vue";
+
 
 const router = useRouter()
-
 const tasks = ref([])
-const newTask = ref({
-  title: '',
-  description: ''
-})
+const newTask = ref({ title: '', description: '' })
 
-// Получение всех задач
+// Модальные окна
+const showReminderModal = ref(false)
+const selectedTask = ref(null)
+const showEditModal = ref(false)
+const editingTask = ref(null)
+
+// Загрузка задач
 const fetchTasks = async () => {
   try {
     const response = await axios.get('/api/tasks')
@@ -32,21 +38,77 @@ const createTask = async () => {
   }
 }
 
-// Обновление задачи
-const updateTask = async (task) => {
+// Переключение статуса
+const toggleStatus = async (task) => {
   try {
-    const response = await axios.put(`/api/tasks/${task.id}`, {
-      title: task.title,
-      description: task.description
-    })
+    const newStatus = task.status === 'pending' ? 'completed' : 'pending'
+    const response = await axios.put(`/api/tasks/${task.id}`, { status: newStatus })
     Object.assign(task, response.data)
   } catch (error) {
-    console.error('Failed to update task:', error)
+    console.error('Failed to toggle status:', error)
+  }
+}
+
+// Открытие напоминания
+const openReminderModal = (task) => {
+  selectedTask.value = task
+  showReminderModal.value = true
+}
+
+// Сохранение напоминания
+const saveReminder = async (dateTime) => {
+  try {
+    const response = await axios.post(`/api/tasks/${selectedTask.value.id}/reminder`, {
+      reminder_at: dateTime
+    })
+    const taskIndex = tasks.value.findIndex(t => t.id === selectedTask.value.id)
+    if (taskIndex !== -1) {
+      tasks.value[taskIndex] = response.data
+    }
+    selectedTask.value = null
+  } catch (error) {
+    console.error('Failed to save reminder:', error)
+    alert(error.response?.data?.message || 'Ошибка при сохранении напоминания')
+  }
+}
+
+// Удаление напоминания
+const deleteReminder = async () => {
+  try {
+    await axios.delete(`/api/tasks/${selectedTask.value.id}/reminder`)
+    const taskIndex = tasks.value.findIndex(t => t.id === selectedTask.value.id)
+    if (taskIndex !== -1) {
+      tasks.value[taskIndex].reminder_at = null
+    }
+    selectedTask.value = null
+  } catch (error) {
+    console.error('Failed to delete reminder:', error)
+  }
+}
+
+// Открытие редактирования
+const openEditModal = (task) => {
+  editingTask.value = task
+  showEditModal.value = true
+}
+
+// Сохранение редактирования
+const saveEdit = async (formData) => {
+  try {
+    const response = await axios.put(`/api/tasks/${editingTask.value.id}`, formData)
+    const taskIndex = tasks.value.findIndex(t => t.id === editingTask.value.id)
+    if (taskIndex !== -1) {
+      tasks.value[taskIndex] = response.data
+    }
+    editingTask.value = null
+  } catch (error) {
+    console.error('Failed to save edit:', error)
   }
 }
 
 // Удаление задачи
 const deleteTask = async (taskId) => {
+  if (!confirm('Вы уверены, что хотите удалить эту задачу?')) return
   try {
     await axios.delete(`/api/tasks/${taskId}`)
     tasks.value = tasks.value.filter(t => t.id !== taskId)
@@ -61,7 +123,6 @@ const handleLogout = async () => {
     await axios.post('/api/logout')
     router.push('/login')
   } catch (error) {
-    console.error('Logout failed:', error)
     router.push('/login')
   }
 }
@@ -78,9 +139,7 @@ onMounted(() => {
         <div>
           <p class="tasks-header__eyebrow">Личный список</p>
           <h1>Мои задачи</h1>
-          <p class="tasks-header__subtitle">Планируйте дела и не забывайте о важном.</p>
         </div>
-
         <button class="logout-button" type="button" @click="handleLogout">
           Выйти
         </button>
@@ -88,7 +147,6 @@ onMounted(() => {
 
       <section class="task-form-card">
         <h2>Новая задача</h2>
-
         <form class="task-form" @submit.prevent="createTask">
           <div class="task-form__field">
             <label for="new-task-title">Название</label>
@@ -100,7 +158,6 @@ onMounted(() => {
                 required
             />
           </div>
-
           <div class="task-form__field">
             <label for="new-task-description">Описание <span>необязательно</span></label>
             <textarea
@@ -110,7 +167,6 @@ onMounted(() => {
                 placeholder="Добавьте детали задачи"
             ></textarea>
           </div>
-
           <button class="primary-button" type="submit">
             <span class="primary-button__icon">+</span>
             Добавить задачу
@@ -130,40 +186,32 @@ onMounted(() => {
           <p>Добавьте первую задачу через форму выше.</p>
         </div>
 
-        <article v-for="task in tasks" :key="task.id" class="task-card">
-          <div class="task-card__content">
-            <button class="task-card__status task-card__status--pending" type="button">
-              Активна
-            </button>
-
-            <div class="task-card__details">
-              <input
-                  v-model="task.title"
-                  class="task-card__title"
-                  type="text"
-                  @blur="updateTask(task)"
-              />
-              <textarea
-                  v-model="task.description"
-                  class="task-card__description"
-                  rows="2"
-                  @blur="updateTask(task)"
-                  placeholder="Описание задачи..."
-              ></textarea>
-            </div>
-          </div>
-
-          <div class="task-card__actions">
-            <button class="text-button" type="button" @click="updateTask(task)">
-              Сохранить
-            </button>
-            <button class="delete-button" type="button" @click="deleteTask(task.id)">
-              Удалить
-            </button>
-          </div>
-        </article>
+        <TaskCard
+            v-for="task in tasks"
+            :key="task.id"
+            :task="task"
+            @toggle-status="toggleStatus"
+            @open-edit="openEditModal"
+            @open-reminder="openReminderModal"
+            @delete="deleteTask"
+        />
       </section>
     </div>
+
+    <ReminderModal
+        :task="selectedTask"
+        :show="showReminderModal"
+        @update:show="showReminderModal = $event"
+        @save="saveReminder"
+        @delete="deleteReminder"
+    />
+
+    <TaskEditModal
+        :task="editingTask"
+        :show="showEditModal"
+        @update:show="showEditModal = $event"
+        @save="saveEdit"
+    />
   </main>
 </template>
 
@@ -391,97 +439,6 @@ onMounted(() => {
   font-size: 14px;
 }
 
-.task-card {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 20px;
-  padding: 18px 25px;
-  border-bottom: 1px solid #eeeeee;
-}
-
-.task-card:last-child {
-  border-bottom: 0;
-}
-
-.task-card__content {
-  display: flex;
-  align-items: flex-start;
-  gap: 13px;
-  min-width: 0;
-}
-
-.task-card__status {
-  flex: 0 0 auto;
-  padding: 6px 9px;
-  border: 0;
-  border-radius: 999px;
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.task-card__status--pending {
-  color: #9a5a00;
-  background: #fff1d6;
-}
-
-.task-card__status--completed {
-  color: #216738;
-  background: #e5f5e8;
-}
-
-.task-card__details {
-  min-width: 0;
-}
-
-.task-card__title {
-  padding: 0;
-  color: #202020;
-  background: transparent;
-  border: 0;
-  font-size: 15px;
-  font-weight: 650;
-  text-align: left;
-}
-
-.task-card__title:hover {
-  text-decoration: underline;
-}
-
-.task-card__description,
-.task-card__reminder {
-  margin: 6px 0 0;
-  color: #747474;
-  font-size: 13px;
-}
-
-.task-card__reminder {
-  color: #3e6f9f;
-}
-
-.task-card__actions {
-  display: flex;
-  flex: 0 0 auto;
-  gap: 12px;
-  align-items: center;
-}
-
-.text-button,
-.delete-button {
-  padding: 5px 0;
-  background: transparent;
-  border: 0;
-  font-size: 13px;
-}
-
-.text-button {
-  color: #235d91;
-}
-
-.delete-button {
-  color: #b03a3a;
-}
-
 @media (max-width: 720px) {
   .tasks-page {
     padding-top: 28px;
@@ -504,31 +461,6 @@ onMounted(() => {
   .tasks-page {
     padding-right: 14px;
     padding-left: 14px;
-  }
-
-  .task-form-card,
-  .tasks-list-section__header,
-  .task-card {
-    padding-right: 17px;
-    padding-left: 17px;
-  }
-
-  .tasks-header__subtitle {
-    display: none;
-  }
-
-  .logout-button {
-    padding: 9px 11px;
-  }
-
-  .task-card {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-
-  .task-card__actions {
-    width: 100%;
-    justify-content: flex-end;
   }
 }
 </style>
