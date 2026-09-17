@@ -10,7 +10,7 @@ Route::get('/user', function (Request $request) {
 })->middleware('auth:sanctum');
 
 // Авторизация пользователя
-Route::post('/login', [LoginController::class, 'store']);
+Route::post('/login', [LoginController::class, 'login']);
 
 // Регистрация пользователя
 Route::post('/registration', [RegisterController::class, 'store']);
